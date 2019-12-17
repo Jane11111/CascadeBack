@@ -15,7 +15,7 @@ class SourceDetection():
         给定source s，以及部分观测到的一条cascade c，采样的集合L，图G，推断，如果以s为源，最可能的ts，以及对应似然值
         :param s: node
         :param c: {node1:t1,node2:t2,...}
-        :param L: [{node:{neighbor1:t,neighbor2:t,...}},{}]
+        :param L: 每条边k个值[{node:{neighbor1:[],neighbor2:[],...}}
         :param G: {node:{neighbor1:alpha,neighbor2:alpha,...}}
         :return: （ts,likelihood_v）or (None,None)表示该节点不可能作为source
         """
@@ -34,15 +34,20 @@ class SourceDetection():
         return res
 
 
-    def Sample(self,s,k,G):
+    def Sample(self,k,l,G):
         """
         返回L
-        :param s: node
-        :param k: f函数超参数
+        :param k: 超参数
+        :param l: 采样的数目
         :param G: {node:{neighbor1:alpha,neighbor2:alpha,...}}
-        :return:每条边采样一个值，返回集合: [{node:{neighbor1:t,neighbor2:t,...}},{}]
+        :return:每条边采样L个值，返回集合: {node:{neighbor1:[],neighbor2:[],...}}
         """
-        L=[]
+        L=G
+        for node in G.keys():
+            for neighbor in G[node].keys():
+                alpha=G[node][neighbor]
+                sample_arr=self.InverseSample(alpha,k,l)
+                L[node][neighbor]=sample_arr
         return L
 
 
