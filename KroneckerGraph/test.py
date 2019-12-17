@@ -6,30 +6,23 @@
 import random
 import numpy as np
 
-from KroneckerGraph.KroneckerGraphGenerator import KroneckerGraphGenerator
-from KroneckerGraph.CascadeGenerator import CascadeGenerator
 
-# initiator=np.array([[0.5,0.5],[0.5,0.5]])
-# initiator=np.array([[0.9,0.5],[0.5,0.3]])
-initiator=np.array([[0.9,0.1],[0.9,0.1]])
-node_num=256
-edge_num=512
-generator=KroneckerGraphGenerator()
-graph=generator.GenerateGraph(initiator,node_num,edge_num)
-
-prob_graph={}
-for k in graph.keys():
-    neighbor_lst=list(graph[k])
-    weight_lst=[1.0/len(neighbor_lst) for i in range(len(neighbor_lst))]
-    prob_graph[k]={neighbor_lst[i]:weight_lst[i] for i in range(len(neighbor_lst))}
+def InverseSample( alpha, k, num):
+    """
+    根据参数为alpha，超参数为k的概率密度函数，采样num个样本
+    :param alpha: f的参数
+    :param k: f的超参数
+    :param num: 样本数目
+    :return:
+    """
+    uniform_arr = np.random.uniform(0, 1, num)
+    res = alpha * (-np.log(1 - uniform_arr)) ** (1.0 / k)
+    return res
 
 
-cascade_generator=CascadeGenerator()
-cascade_dic=cascade_generator.GenerateCascade(prob_graph,2,2,40)
-for s in cascade_dic.keys():
-    print(prob_graph[s])
-    for path in cascade_dic[s]:
-        print(path)
-
-
+alpha=0.8
+k=5
+num=10
+res=InverseSample(alpha,k,num)
+print(res)
 
