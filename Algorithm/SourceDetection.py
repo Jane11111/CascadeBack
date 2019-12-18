@@ -53,9 +53,9 @@ class SourceDetection():
         res_s=None
         max_likelihood=-1
         res_ts_lst=[]
-        for s in M:
+        for s in M:#所有结点都试一下
 
-            (ts_lst,likelihood)=self.InferTime(s,D,L,G,M,O)#以s为源，推断所有的cascade时间，及其似然
+            (ts_lst,likelihood)=self.InferTime(s,D,L,G)#以s为源，推断所有的cascade时间，及其似然
 
             if likelihood>max_likelihood:#找到了更优的source
                 res_s=s
@@ -64,15 +64,13 @@ class SourceDetection():
         return (res_s,res_ts_lst)
 
 
-    def InferTime(self,s,D,L,G,M,O):
+    def InferTime(self,s,D,L,G):
         """
         给定source s，以及部分观测到的一条cascade c，采样的集合L，图G，推断，如果以s为源，最可能的ts，以及对应似然值
         :param s: node
         :param D: 具有同一个源节点的cascade集合，[{node1:t1,node2:t2,...},{},{},...]
         :param L: 每条边k个值{node:{neighbor1:[],neighbor2:[],...}}
         :param G: {node:{neighbor1:alpha,neighbor2:alpha,...}}
-        :param M: 非O的隐藏结点，且有O作为父亲
-        :param O: D中所有observed的结点
         :return: （ts_lst,likelihood）其中ts_lst表示D中所有cascade对应的最可能的ts list，likelihood表示以s为源的最大似然；or (None,None)表示该节点不可能作为source
         """
 
@@ -84,9 +82,15 @@ class SourceDetection():
 
 
         #找到所有的change point，基于c和 path_length
+        All_O=set([])#D中所有观测到的结点
+        for cascade in D:
+            for node in cascade.keys():
+                All_O.add(node)
 
         change_point_lst=[]
-        for i in O:
+        for i in All_O:
+            #TODO 这个按照每个cascade中出现的结点计算change point，确实能够包含所有qingk
+            #TODO 但是同时也会增加很多区间，因为每个cascade单独计算的ts
             for cascade in D:#TODO 因为ti在不同的cascade中值不同，所以每个都计算下
                 if i not in cascade :
                     continue
@@ -97,33 +101,75 @@ class SourceDetection():
                         if ti-tjl<=0:
                             continue
                         change_point_lst.append(ti-tjl)
-        change_point_lst.sort()
+        change_point_lst.sort()#从小到大排序
 
 
         ts_lst=[]
         likelihood=1
         #对于每两个change point对应的区间，可以对应一个\phi L （ts）式子，然后后面就是对这个式子求解了。
-
+        change_point_lst.append(np.inf)#最后一个区间是 无穷大
+        change_point_lst.insert(0,0)#第一个区间是 负无穷到某个值
         for cascade in D:#TODO 对每个cascade都应该有一个ts
             opt_ts=None
             max_likelihood=-1
-            for idx in range(len(change_point_lst)+1):#分段求解
+            O = set([])  # TODO 当前cascade中观测到的结点
+            M = set([])  # TODO 相对于上面的O而言的H，并且有O作为父亲
+            for u in cascade.keys():
+                O.add(u)
+                for v in self.getParent(u):
+                    M.add(v)
+            M = M.difference(O)
+            O_left_lst=[]
+            O_right_lst=[]#不变
+            M_up_left_lst=[]#不随ts改变，随采样大小而改变，与M_down_left_lst等价
+            M_up_right_lst=[]
+            M_down_left_lst=[]#不随ts改变，随采样大小而改变，与M_up_left_lst等价
+            M_down_right_lst=[]#不随ts改变，随采样大小而改变
+            # TODO fixted_formula =XXX 处理O_right_lst这个列表
+
+            l_lst_dic={}
+            for cur_l in range(l):
+                for i in M:
+                    parent_set=self.getParent(i)
+                    for j in parent_set.difference(O):
+                        if path_length[j][cur_l]<path_length[i][cur_l]:
+                            M_up_left_lst.append(j)
+                            M_down_left_lst.append(j)
+
+                    for j in parent_set.intersection(O):
+                        if path_length[j][cur_l]<path_length[i][cur_l]:
+                            M_down_right_lst.append(j)
+                l_lst_dic[cur_l]={}
+                l_lst_dic[cur_l]['m_up_left_lst']=M_up_left_lst
+                l_lst_dic[cur_l]['m_down_left_lst']=M_down_left_lst
+                l_lst_dic[cur_l]['m_down_right_lst']=M_down_right_lst
+            # TODO ts_fixted_formula=XXX #处理不随分段值而改变的列表
+
+            for idx in np.arange(1,len(change_point_lst)):#分段求解
                 formula = None
+                # 找到区间
+                a = change_point_lst[idx - 1]
+                b = change_point_lst[idx]
                 for cur_l in range(l):
                     for i in O:#TODO 这个O感觉应该是对当前这个cascade的O
-                        pass
-                    for i in M:#对应上面O
-                        pass
+                        parent_set=set(self.getParent(i))
+                        left_lst=[]#pi_i \ O
+                        for j in parent_set.difference(O):
+                            if path_length[j][cur_l]+a+0.5*(b-a)>=cascade[i]:
+                                continue
+                            left_lst.append(j)
+                        #TODO formula=XXXXXX #处理O_left_lst这个列表
+                    for i in M:#TODO 对应上面O
+                        parent_set=set(self.getParent(i))
+                        M_up_right_lst=[]
+                        for j in parent_set.intersection(O):
+                            if cascade[j]>=path_length[i][cur_l]+a+0.5*(b-a):
+                                continue
+                            M_up_right_lst.append(j)
+                        #TODO formula=XXXX #处理M_up_right_lst这个列表
+                    #TODO formula=XXXX    #综合多个列表
 
-                if idx==0:
-                    a=None
-                    b=change_point_lst[idx]
-                elif idx==len(change_point_lst):
-                    a=idx-1
-                    b=None
-                else:
-                    a=idx-1
-                    b=idx
+
                 cur_ts,cur_likelihood=self.Solve(formula,a,b)#就是给当前段最优解
                 if cur_likelihood>max_likelihood:#当前这个段的解比前面的都好
                     max_likelihood=cur_likelihood
